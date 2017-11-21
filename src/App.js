@@ -1,106 +1,192 @@
+// @flow
 import React, { Component } from "react";
+import styled from "styled-components";
 
-import "./App.css";
+import { fetchLatestBlock, fetchBlockForHash } from "./blockServices";
+
+import Block from "./Block";
+
+import type { TypeHash, TypeBlock } from "./types.flow";
 
 const States = {
   INIT: "INIT",
-  FETCHING: "FETCHING",
+  FETCH_PREVIOUS: "FETCH_PREVIOUS",
+  FETCH_NEXT: "FETCH_NEXT",
   LOAD: "LOAD",
   ERROR: "ERROR"
 };
 
-async function fetchLatestBlock() {
-  const latestBlockResponse = await fetch(
-    "https://blockchain.info/latestblock"
-  );
-  const latestBlock = await latestBlockResponse.json();
-  const latestBlockDetailsResponse = await fetch(
-    `https://blockchain.info/rawblock/${latestBlock.hash}`
-  );
+type TypeState = {
+  state: $Keys<typeof States>,
+  currentBlockHash: TypeHash,
+  lastestBlockHash: TypeHash,
+  blocks: {
+    [hash: TypeHash]: TypeBlock
+  }
+};
 
-  return await latestBlockDetailsResponse.json();
-}
+const AppComponent = styled.div`
+  text-align: center;
+`;
 
-async function fetchBlockForHash(hash, nextHash) {
-  const blockResponse = await fetch(`https://blockchain.info/rawblock/${hash}`);
-  const block = await blockResponse.json();
+const Content = styled.div`
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+`;
 
-  return Object.assign({}, block, { next_block: nextHash });
-}
+const ButtonGroup = styled.div`
+  display: flex;
+  align-items: center;
+`;
 
-class App extends Component {
+const BlockChainContainer = styled.div`
+  min-height: 300px;
+  min-width: 150px;
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  border: solid black 5px;
+`;
+
+const BlockInfoContainer = styled.div`
+  min-height: 300px;
+  min-width: 150px;
+  padding: 20px;
+  border: solid black 5px;
+  text-align: left;
+`;
+
+class App extends Component<void, TypeState> {
   state = {
     state: States.INIT,
-    currentBlock: {}
+    currentBlockHash: "",
+    lastestBlockHash: "",
+    blocks: {}
   };
 
   async componentDidMount() {
-    const currentBlock = await fetchLatestBlock();
-
-    this.setState({ state: States.LOAD, currentBlock });
+    this.getLatestBlock();
   }
 
-  async getBlockForHash(hash) {
-    this.setState({ state: States.FETCHING });
+  async getLatestBlock() {
+    try {
+      const currentBlock = await fetchLatestBlock();
+      const { hash } = currentBlock;
 
-    const currentBlock = await fetchBlockForHash(
-      hash,
-      this.state.currentBlock.hash
+      this.setState({
+        state: States.LOAD,
+        currentBlockHash: hash,
+        lastestBlockHash: hash,
+        blocks: {
+          ...this.state.blocks,
+          [hash]: currentBlock
+        }
+      });
+    } catch (_) {
+      this.setState({ state: States.ERROR });
+    }
+  }
+
+  async getPreviousBlockForHash() {
+    const currentHash = this.state.blocks[this.state.currentBlockHash];
+    this.setState({ state: States.FETCH_PREVIOUS });
+
+    try {
+      const currentBlock = await fetchBlockForHash(currentHash);
+      const { hash } = currentBlock;
+
+      this.setState({
+        state: States.LOAD,
+        currentBlockHash: hash,
+        blocks: {
+          [hash]: currentBlock
+        }
+      });
+    } catch (_) {
+      this.setState({ state: States.ERROR });
+    }
+  }
+
+  getContent = () => {
+    const { state, blocks, currentBlockHash } = this.state;
+    const currentBlock = blocks[currentBlockHash];
+
+    return (
+      <Content>
+        {state === States.LOAD && (
+          <div>
+            <BlockChainContainer>
+              {Object.entries(blocks).map(Block)}
+            </BlockChainContainer>
+            <BlockInfoContainer>
+              <p>Nonce: {currentBlock.nonce}</p>
+              <p>Time: {currentBlock.time}</p>
+              <p>Height: {currentBlock.height}</p>
+              <p>Transaction Count: {currentBlock.n_tx}</p>
+            </BlockInfoContainer>
+          </div>
+        )}
+        {state === States.FETCHING && (
+          <div>
+            <BlockChainContainer>
+              {Object.entries(blocks).map(Block)}
+              <Block loading={true} />
+            </BlockChainContainer>
+            <BlockInfoContainer>
+              <p>Nonce: </p>
+              <p>Time: </p>
+              <p>Height: </p>
+              <p>Transaction Count: </p>
+            </BlockInfoContainer>
+          </div>
+        )}
+        <ButtonGroup>
+          <button onClick={this.getPreviousBlockForHash.bind(this)}>
+            Get Previous Block
+          </button>
+          <button onClick={() => {}}>Get Next Block</button>
+        </ButtonGroup>
+      </Content>
     );
-
-    this.setState({ state: States.LOAD, currentBlock });
-  }
+  };
 
   render() {
-    switch (this.state.state) {
-      case States.INIT:
-        return (
-          <div className="App">
-            <h1>Blockchain Visualizer</h1>
-            <p>Fetching latest Block data...</p>
-          </div>
-        );
-      case States.FETCHING:
-        return (
-          <div className="App">
-            <h1>Blockchain Visualizer</h1>
-            <p>Fetching previous Block data...</p>
-          </div>
-        );
-      case States.LOAD:
-        const { currentBlock } = this.state;
+    const { state } = this.state;
 
-        console.log(currentBlock);
+    return (
+      <AppComponent>
+        <h1>Blockchain Visualizer</h1>
+        {state === States.INIT && <p>Fetching latest Block data...</p>}
+        {state === States.ERROR && (
+          <div>
+            <p>
+              There was an error fetching blocks. Please refresh to try again or
+              press the button below to retry fetching the latest block.
+            </p>
+            <button onClick={this.getLatestBlock.bind(this)}>
+              Re-fetch Latest Block
+            </button>
+          </div>
+        )}
+        {(state === States.LOAD || state === States.FETCHING) &&
+          this.getContent()}
+      </AppComponent>
+    );
+  }
+}
 
-        return (
-          <div className="App">
-            <h1>Blockchain Visualizer</h1>
-            <p>Hash: {currentBlock.hash}</p>
-            <p>Nonce: {currentBlock.nonce}</p>
-            <p>Time: {currentBlock.time}</p>
-            <p>Height: {currentBlock.height}</p>
-            <p>Transaction Count: {currentBlock.n_tx}</p>
+export default App;
+
+/*
+<p>Hash: {currentBlock.hash}</p>
             <ol>
               {currentBlock.tx
                 .filter((_, index) => index < 5)
                 .map(transaction => <li>{transaction.value}</li>)}
             </ol>
-            <button
-              onClick={() => this.getBlockForHash(currentBlock.prev_block)}
-            >
-              Get Previous Block
-            </button>
-            <button
-              onClick={() => this.getBlockForHash(currentBlock.next_block)}
-            >
-              Get Next Block
-            </button>
-          </div>
-        );
-      default:
-        return null;
-    }
-  }
-}
+                      </div>
+        )}
+      </div>
 
-export default App;
+*/
