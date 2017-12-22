@@ -1,10 +1,7 @@
-// @flow
 import React, { Component } from "react";
 import styled from "styled-components";
 
 import { fetchLatestBlock, fetchBlockForHash } from "./blockServices";
-
-import Block from "./Block";
 
 import type { TypeHash, TypeBlock } from "./types.flow";
 
@@ -57,7 +54,7 @@ const BlockInfoContainer = styled.div`
   text-align: left;
 `;
 
-class App extends Component<void, TypeState> {
+export default class App extends Component<void, TypeState> {
   state = {
     state: States.INIT,
     currentBlockHash: "",
@@ -72,6 +69,7 @@ class App extends Component<void, TypeState> {
   async getLatestBlock() {
     try {
       const currentBlock = await fetchLatestBlock();
+      console.log(currentBlock);
       const { hash } = currentBlock;
 
       this.setState({
@@ -89,11 +87,10 @@ class App extends Component<void, TypeState> {
   }
 
   async getPreviousBlockForHash() {
-    const currentHash = this.state.blocks[this.state.currentBlockHash];
     this.setState({ state: States.FETCH_PREVIOUS });
 
     try {
-      const currentBlock = await fetchBlockForHash(currentHash);
+      const currentBlock = await fetchBlockForHash(this.state.currentBlockHash);
       const { hash } = currentBlock;
 
       this.setState({
@@ -116,9 +113,7 @@ class App extends Component<void, TypeState> {
       <Content>
         {state === States.LOAD && (
           <div>
-            <BlockChainContainer>
-              {Object.entries(blocks).map(Block)}
-            </BlockChainContainer>
+            <BlockChainContainer />
             <BlockInfoContainer>
               <p>Nonce: {currentBlock.nonce}</p>
               <p>Time: {currentBlock.time}</p>
@@ -129,10 +124,7 @@ class App extends Component<void, TypeState> {
         )}
         {state === States.FETCHING && (
           <div>
-            <BlockChainContainer>
-              {Object.entries(blocks).map(Block)}
-              <Block loading={true} />
-            </BlockChainContainer>
+            <BlockChainContainer />
             <BlockInfoContainer>
               <p>Nonce: </p>
               <p>Time: </p>
@@ -153,7 +145,6 @@ class App extends Component<void, TypeState> {
 
   render() {
     const { state } = this.state;
-
     return (
       <AppComponent>
         <h1>Blockchain Visualizer</h1>
@@ -175,18 +166,3 @@ class App extends Component<void, TypeState> {
     );
   }
 }
-
-export default App;
-
-/*
-<p>Hash: {currentBlock.hash}</p>
-            <ol>
-              {currentBlock.tx
-                .filter((_, index) => index < 5)
-                .map(transaction => <li>{transaction.value}</li>)}
-            </ol>
-                      </div>
-        )}
-      </div>
-
-*/
